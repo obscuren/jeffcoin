@@ -1,0 +1,11 @@
+=============== Jul 12, 2014 (CEST) ===============
+11:38:31.645597 db@open opening
+11:38:31.645774 journal@recovery F·1
+11:38:31.646982 journal@recovery recovering @9
+11:38:31.648439 mem@flush created L0@11 N·1 S·153B "K..g,v36":"K..g,v36"
+11:38:31.649144 db@janitor F·6 G·0
+11:38:31.649169 db@open done T·3.472762ms
+11:38:31.649235 table@compaction L0·4 -> L1·0 S·1KiB Q·37
+11:38:31.650231 table@build created L1@14 N·23 S·1KiB "\x04..\xd7,v13":"\xfb..i,v19"
+11:38:31.650799 table@compaction commited F-3 S-487B D·10 T·1.529106ms
+11:38:39.759205 db@close closing
