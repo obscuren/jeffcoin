@@ -1,8 +1,0 @@
-=============== Jul 15, 2014 (CEST) ===============
-20:44:10.913117 db@open opening
-20:44:10.913321 journal@recovery F·1
-20:44:10.914472 journal@recovery recovering @12
-20:44:10.916075 mem@flush created L0@15 N·1 S·153B "K..g,v38":"K..g,v38"
-20:44:10.919456 db@janitor F·4 G·0
-20:44:10.919500 db@open done T·6.266444ms
-20:44:26.967250 db@close closing
