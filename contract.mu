@@ -6,23 +6,20 @@
 #define BLOCK_N 253
 
 // JeffCoin Genesis :)
-this.store[BLOCK_N] = 0 
+contract.storage[BLOCK_N] = 0 
 // Set the initial number (so we can track block changes)
-this.store[ETH_START_B] = this.number()
-this.store[SEED] = 0
-this.store[DIFF] = 1
+contract.storage[ETH_START_B] = block.number()
+contract.storage[SEED] = 0
+contract.storage[DIFF] = 1
 
 return compile {
-    var diff = this.store[DIFF]
+    var diff = contract.storage[DIFF]
     
     var[2] ndat
     ndat[0] = this.data[0]
-    ndat[1] = this.store[SEED]
-    m_push(ndat)
-    m_push(64)
-    asm { sha3 }
+    ndat[1] = contract.storage[SEED]
 
-    var nonce = m_pop()
+    var nonce = sha3(ndat, sizeof(ndat))
     
     // Check if the mined nonce is correct
     for i := 0; i < diff; i++ {
@@ -31,12 +28,12 @@ return compile {
         }
     }
 
-    var blockNo = this.store[BLOCK_N]
+    var blockNo = contract.storage[BLOCK_N]
     // Amount of blocks found for the block (used to determine the difficulty)
-    this.store[BLOCK_F + blockNo] = this.store[BLOCK_F + blockNo] + 1
+    contract.storage[BLOCK_F + blockNo] = contract.storage[BLOCK_F + blockNo] + 1
 
     // Check if we need to increase the difficulty
-    if this.store[ETH_START_B] < this.number() {
+    if contract.storage[ETH_START_B] < block.number() {
         // TODO update difficulty
     }
 }
