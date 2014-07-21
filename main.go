@@ -11,14 +11,24 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"os/user"
+	"path"
 	"runtime"
 )
 
+func DataPath() string {
+	usr, _ := user.Current()
+	return path.Join(usr.HomeDir, ".ethereum")
+}
+
+var (
+	Datadir = DataPath()
+)
+
 const (
-	ClientIdentifier = "JeffCoin Native Client"
-	Version          = "0.5.16"
-	Datadir          = "jeffcoin"
-	ConfigFile       = "conf"
+	ClientIdentifier = "JeffCoin NC"
+	Version          = "0.1"
+	ConfigFile       = "conf.ini"
 	Identifier       = "Jeff"
 	LogLevel         = 4
 	OutboundPort     = "40404"
@@ -98,7 +108,8 @@ func main() {
 
 	ethereum.ConnectToPeer("localhost:30303")
 
-	go mine(ethereum)
+	jeffcoin := New(ethereum, keyManager.KeyPair())
+	go jeffcoin.Mine()
 
 	// this blocks the thread
 	ethereum.WaitForShutdown()
