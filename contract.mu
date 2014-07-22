@@ -5,6 +5,7 @@
 
 #define BLOCK_F 254
 #define BLOCK_N 253
+#define ADDR_START 1000
 
 // JeffCoin Genesis :)
 contract.storage[BLOCK_N] = 0 
@@ -41,6 +42,9 @@ return compile {
 	contract.storage[BLOCK_F + blockNo] = contract.storage[BLOCK_F + blockNo] + 1
 	// Change the seed
 	contract.storage[SEED] = contract.storage[SEED] + 1
+
+	// Reward 1000 JeffCoin to the miner
+	contract.storage[ADDR_START + tx.sender()] = contract.storage[ADDR_START + tx.sender()] + 100000
 
 	// Check if we need to increase the difficulty
 	if contract.storage[ETH_START_B] < block.number() {

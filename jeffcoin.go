@@ -8,28 +8,31 @@ import (
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethvm"
+	"math/big"
 	"os"
 	"time"
 )
 
 var (
-	JeffCoinAddr = ethutil.Hex2Bytes("7ae9aba14c89d5ada010922482348ea0e283bc36")
+	JeffCoinAddr = ethutil.Hex2Bytes("22fa3ebce6ef9ca661a960104d3087eec040011e")
 	coinlogger   = ethlog.NewLogger("JEFF")
 )
 
 type JeffCoin struct {
-	state *ethchain.State
+	state *ethstate.State
 	eth   *eth.Ethereum
-	fake  *ethchain.StateObject
+	fake  *ethstate.StateObject
 	pub   *ethpub.PEthereum
 	key   *ethcrypto.KeyPair
 }
 
 func New(ethereum *eth.Ethereum, keyPair *ethcrypto.KeyPair) *JeffCoin {
-	state := ethereum.StateManager().CurrentState().Copy()
+	state := ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, ethereum.StateManager().CurrentState().Root()))
 	fake := state.GetOrNewStateObject(keyPair.Address())
-	fake.SetGasPool(ethutil.Big("100000000000000000000000000"))
 
 	return &JeffCoin{
 		eth:   ethereum,
@@ -64,7 +67,7 @@ func (self *JeffCoin) getDiff() int {
 }
 
 func (self *JeffCoin) createTx(nonce []byte) (err error) {
-	_, err = self.pub.Transact(ethutil.Bytes2Hex(self.key.PrivateKey), ethutil.Bytes2Hex(JeffCoinAddr), "0", "6000", "10000000000000", string(nonce))
+	_, err = self.pub.Transact(ethutil.Bytes2Hex(self.key.PrivateKey), ethutil.Bytes2Hex(JeffCoinAddr), "0", "6000", "10000000000000", "0x"+ethutil.Bytes2Hex(nonce))
 
 	return
 }
@@ -76,25 +79,32 @@ func (self *JeffCoin) Mine() {
 		txChan    = make(chan ethutil.React, 1)
 		reactor   = self.eth.Reactor()
 		block     = self.eth.BlockChain().CurrentBlock
-		parent    = self.eth.BlockChain().GetBlock(block.PrevHash)
+
+		env = NewEnv(self.state, block)
+		vm  = ethvm.New(env)
 	)
+	vm.Verbose = true
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 
 	for {
 		select {
-		case <-blockChan:
+		case msg := <-blockChan:
 			quitChan <- true
 			// Get the new Ethereum state
-			self.state = self.eth.StateManager().CurrentState().Copy()
+			self.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, self.eth.StateManager().CurrentState().Root()))
+			block = msg.Resource.(*ethchain.Block)
 		case msg := <-txChan:
-			tx := []*ethchain.Transaction{msg.Resource.(*ethchain.Transaction)}
+			tx := msg.Resource.(*ethchain.Transaction)
 
-			if bytes.Compare(tx[0].Recipient, JeffCoinAddr) == 0 {
-				_, _, _, err := self.eth.StateManager().ProcessTransactions(self.fake, self.state, block, parent, tx)
-				if err != nil {
-					coinlogger.Warnln("Error proc tx ", err)
+			if bytes.Compare(tx.Recipient, JeffCoinAddr) == 0 {
+				object := self.state.GetStateObject(JeffCoinAddr)
+				callerClosure := ethvm.NewClosure(self.fake, object, object.Code, big.NewInt(1000000), big.NewInt(0))
+
+				_, _, e := callerClosure.Call(vm, tx.Data)
+				if e != nil {
+					fmt.Println("error", e)
 				}
 
 				// A block has been found and thus the seed has probably changed
@@ -105,10 +115,9 @@ func (self *JeffCoin) Mine() {
 			diff := self.getDiff()
 			coinlogger.Debugln("mining with diff = ", diff, " seed = ", seed)
 			if diff > 0 {
-				l := ethutil.BinaryLength(seed)
-				n := ethutil.NumberToBytes(int32(seed), l*8)
+				n := ethutil.NumberToBytes(int64(seed), 64)
 				b := ethutil.LeftPadBytes(n, 32)
-				nonce := mineJeffCoin(diff, append(self.eth.BlockChain().CurrentBlock.PrevHash, b...), quitChan)
+				nonce := mineJeffCoin(diff, b, quitChan)
 				if len(nonce) == 32 {
 					err := self.createTx(nonce)
 					if err != nil {
@@ -128,7 +137,7 @@ func (self *JeffCoin) Mine() {
 	}
 }
 
-func mineJeffCoin(diff int, prevHash []byte, quit chan bool) (nonce []byte) {
+func mineJeffCoin(diff int, seed []byte, quit chan bool) (nonce []byte) {
 	cmp := make([]byte, diff)
 
 out:
@@ -137,12 +146,12 @@ out:
 		case <-quit:
 			break out
 		default:
-			l := ethutil.BinaryLength(int(s))
-			n := ethutil.NumberToBytes(s, l*8)
+			n := ethutil.NumberToBytes(s, 64)
 			nonce = ethutil.LeftPadBytes(n, 32)
 
-			h := ethcrypto.Sha3Bin(append(prevHash, nonce...))
+			h := ethcrypto.Sha3Bin(append(nonce, seed...))
 			if bytes.Compare(h[:diff], cmp) == 0 {
+				fmt.Printf("SHA3( %x )\n", h)
 				break out
 			}
 		}
