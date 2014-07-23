@@ -50,8 +50,6 @@ func (self *JeffCoin) getSeed() int {
 		return int(stateObject.GetStorage(ethutil.Big("3")).Uint())
 	}
 
-	coinlogger.Warnln("JeffCoin not found on the network")
-
 	return 0
 }
 
@@ -60,8 +58,6 @@ func (self *JeffCoin) getDiff() int {
 	if stateObject != nil {
 		return int(stateObject.GetStorage(ethutil.Big("1")).Uint())
 	}
-
-	coinlogger.Warnln("JeffCoin not found on the network")
 
 	return 0
 }
