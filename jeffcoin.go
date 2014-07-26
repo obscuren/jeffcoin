@@ -3,6 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"os"
+	"time"
+
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
@@ -12,13 +16,11 @@ import (
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethvm"
-	"math/big"
-	"os"
-	"time"
 )
 
 var (
-	JeffCoinAddr = ethutil.Hex2Bytes("22fa3ebce6ef9ca661a960104d3087eec040011e")
+	//JeffCoinAddr = ethutil.Hex2Bytes("22fa3ebce6ef9ca661a960104d3087eec040011e")
+	JeffCoinAddr []byte
 	coinlogger   = ethlog.NewLogger("JEFF")
 )
 
@@ -43,12 +45,68 @@ func New(ethereum *eth.Ethereum, keyPair *ethcrypto.KeyPair) *JeffCoin {
 	}
 }
 
+func (self *JeffCoin) WaitForCatchUp() {
+	time.Sleep(2 * time.Second)
+
+	for !self.eth.IsUpToDate() {
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func (self *JeffCoin) Start() {
+	addrPath := ethutil.ExpandHomePath("~/.jeffcoin/addr")
+	if ethutil.FileExist(addrPath) {
+		addr, _ := ethutil.ReadAllFile(addrPath)
+		JeffCoinAddr = ethutil.Hex2Bytes(addr[0 : len(addr)-1])
+
+		coinlogger.Infof("Found addr file %x\n", JeffCoinAddr)
+
+		self.WaitForCatchUp()
+
+		coinlogger.Infoln("Ethereum is up to date")
+	} else {
+		self.WaitForCatchUp()
+
+		coinlogger.Infoln("Ethereum is up to date")
+
+		code, err := ethutil.ReadAllFile("./contract.mu")
+		if err != nil {
+			exit("cannot read contract.mu %v\n", err)
+		}
+
+		receipt, err := self.pub.Create(ethutil.Bytes2Hex(self.key.PrivateKey), "0", "6000", "10000000000000", code)
+		if err != nil {
+			exit("initial %v\n", err)
+		}
+
+		JeffCoinAddr = ethutil.Hex2Bytes(receipt.Address)
+		coinlogger.Infof("init contract %x\n", JeffCoinAddr)
+		err = ethutil.WriteFile(addrPath, []byte(ethutil.Bytes2Hex(JeffCoinAddr)))
+		if err != nil {
+			exit("err write %v\n", err)
+		}
+	}
+
+	stateObject := self.state.GetStateObject(JeffCoinAddr)
+	if stateObject != nil {
+		addr := big.NewInt(1000)
+		addr.Add(addr, ethutil.BigD(self.fake.Address()))
+
+		value := stateObject.GetStorage(addr).BigInt()
+		fmt.Println("United Jeff Credits: ", value)
+	}
+
+	go self.Mine()
+}
+
 func (self *JeffCoin) getSeed() int {
 	stateObject := self.state.GetStateObject(JeffCoinAddr)
 
 	if stateObject != nil {
 		return int(stateObject.GetStorage(ethutil.Big("3")).Uint())
 	}
+
+	exit("err not found")
 
 	return 0
 }
@@ -58,6 +116,8 @@ func (self *JeffCoin) getDiff() int {
 	if stateObject != nil {
 		return int(stateObject.GetStorage(ethutil.Big("1")).Uint())
 	}
+
+	exit("err not found")
 
 	return 0
 }

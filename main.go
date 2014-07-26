@@ -2,18 +2,19 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethdb"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"log"
 	"os"
 	"os/signal"
 	"os/user"
 	"path"
 	"runtime"
+
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 )
 
 func DataPath() string {
@@ -33,7 +34,7 @@ const (
 	LogLevel         = 4
 	OutboundPort     = "40404"
 	MaxPeers         = 10
-	UseSeed          = false
+	UseSeed          = true
 )
 
 var logger = ethlog.NewLogger("CLI")
@@ -109,7 +110,7 @@ func main() {
 	ethereum.ConnectToPeer("localhost:30303")
 
 	jeffcoin := New(ethereum, keyManager.KeyPair())
-	go jeffcoin.Mine()
+	jeffcoin.Start()
 
 	// this blocks the thread
 	ethereum.WaitForShutdown()
