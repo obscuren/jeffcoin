@@ -30,6 +30,9 @@ type JeffCoin struct {
 	fake  *ethstate.StateObject
 	pub   *ethpub.PEthereum
 	key   *ethcrypto.KeyPair
+
+	mineStopChan chan bool
+	IsMining     bool
 }
 
 func New(ethereum *eth.Ethereum, keyPair *ethcrypto.KeyPair) *JeffCoin {
@@ -37,11 +40,12 @@ func New(ethereum *eth.Ethereum, keyPair *ethcrypto.KeyPair) *JeffCoin {
 	fake := state.GetOrNewStateObject(keyPair.Address())
 
 	return &JeffCoin{
-		eth:   ethereum,
-		state: state,
-		fake:  fake,
-		pub:   ethpub.New(ethereum),
-		key:   keyPair,
+		eth:          ethereum,
+		state:        state,
+		fake:         fake,
+		pub:          ethpub.New(ethereum),
+		key:          keyPair,
+		mineStopChan: make(chan bool, 1),
 	}
 }
 
@@ -86,17 +90,18 @@ func (self *JeffCoin) Start() {
 			exit("err write %v\n", err)
 		}
 	}
+}
 
+func (self *JeffCoin) Balance() int32 {
 	stateObject := self.state.GetStateObject(JeffCoinAddr)
 	if stateObject != nil {
-		addr := big.NewInt(1000)
-		addr.Add(addr, ethutil.BigD(self.fake.Address()))
+		addr := ethutil.NewValue(1000).Add(self.fake.Address())
+		value := stateObject.GetStorage(addr.BigInt())
 
-		value := stateObject.GetStorage(addr).BigInt()
-		fmt.Println("United Jeff Credits: ", value)
+		return int32(value.Uint())
 	}
 
-	go self.Mine()
+	return 0
 }
 
 func (self *JeffCoin) getSeed() int {
@@ -128,6 +133,16 @@ func (self *JeffCoin) createTx(nonce []byte) (err error) {
 	return
 }
 
+func (self *JeffCoin) StartMiner() {
+	self.IsMining = true
+	go self.Mine()
+}
+
+func (self *JeffCoin) StopMiner() {
+	self.IsMining = false
+	self.mineStopChan <- true
+}
+
 func (self *JeffCoin) Mine() {
 	var (
 		quitChan  = make(chan bool, 1)
@@ -144,8 +159,12 @@ func (self *JeffCoin) Mine() {
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 
+out:
 	for {
 		select {
+		case <-self.mineStopChan:
+			quitChan <- true
+			break out
 		case msg := <-blockChan:
 			quitChan <- true
 			// Get the new Ethereum state

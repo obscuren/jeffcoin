@@ -69,6 +69,8 @@ func initDataDir(Datadir string) {
 }
 
 func main() {
+	UiInit()
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	handleInterrupt()
@@ -112,7 +114,12 @@ func main() {
 	jeffcoin := New(ethereum, keyManager.KeyPair())
 	jeffcoin.Start()
 
+	container := NewContainer(ethereum, jeffcoin)
+	if container.Show() != nil {
+		exit("container err: %v\n", err)
+	}
+
 	// this blocks the thread
-	ethereum.WaitForShutdown()
+	//ethereum.WaitForShutdown()
 	ethlog.Flush()
 }
