@@ -7,7 +7,7 @@ import QtQuick.Controls.Styles 1.1
 
 ApplicationWindow {
 	id: root
-	title: "United Jeff Coin NC"
+	title: "United JΞF Credit NC"
 
 	width: 360
 	height: 140
@@ -56,7 +56,7 @@ ApplicationWindow {
 			
 			Label {
 				objectName: "balanceLabel"
-				text: "UJC: " + jc.balance()
+				text: "JΞF: " + jc.balance()
 				y: 2
 				anchors {
 					top: parent.top

@@ -56,7 +56,7 @@ func (self *Container) Show() error {
 }
 
 func (self *Container) setBalanceLabel() {
-	self.object("balanceLabel").Set("text", fmt.Sprintf("UJC: %d", self.jc.Balance()))
+	self.object("balanceLabel").Set("text", fmt.Sprintf("JΞF: %d", self.jc.Balance()))
 }
 
 func (self *Container) object(name string) qml.Object {
