@@ -19,7 +19,6 @@ import (
 )
 
 var (
-	//JeffCoinAddr = ethutil.Hex2Bytes("22fa3ebce6ef9ca661a960104d3087eec040011e")
 	JeffCoinAddr []byte
 	coinlogger   = ethlog.NewLogger("JEFF")
 )
@@ -128,7 +127,8 @@ func (self *JeffCoin) getDiff() int {
 }
 
 func (self *JeffCoin) createTx(nonce []byte) (err error) {
-	_, err = self.pub.Transact(ethutil.Bytes2Hex(self.key.PrivateKey), ethutil.Bytes2Hex(JeffCoinAddr), "0", "6000", "10000000000000", "0x"+ethutil.Bytes2Hex(nonce))
+	data := ethutil.ParseData("mine", nonce)
+	_, err = self.pub.Transact(ethutil.Bytes2Hex(self.key.PrivateKey), ethutil.Bytes2Hex(JeffCoinAddr), "0", "6000", "10000000000000", "0x"+ethutil.Bytes2Hex(data))
 
 	return
 }

@@ -22,32 +22,36 @@ return compile {
 		}
 	}
 
-	var diff = contract.storage[DIFF]
+	if this.data[0] == "mine" {
+		var diff = contract.storage[DIFF]
 
-	var[2] ndat
-	ndat[0] = this.data[0]
-	ndat[1] = contract.storage[SEED]
+		var[2] ndat
+		ndat[0] = this.data[1]
+		ndat[1] = contract.storage[SEED]
 
-	var nonce = sha3(ndat, sizeof(ndat))
+		var nonce = sha3(ndat, sizeof(ndat))
 
-	// Check if the mined nonce is correct
-	for i := 0; i < diff; i++ {
-		if byte(nonce, i) != 0 {
-			stop() // invalid nonce
+		// Check if the mined nonce is correct
+		for i := 0; i < diff; i++ {
+			if byte(nonce, i) != 0 {
+				stop() // invalid nonce
+			}
 		}
-	}
 
-	var blockNo = contract.storage[BLOCK_N]
-	// Amount of blocks found for the block (used to determine the difficulty)
-	contract.storage[BLOCK_F + blockNo] = contract.storage[BLOCK_F + blockNo] + 1
-	// Change the seed
-	contract.storage[SEED] = contract.storage[SEED] + 1
+		var blockNo = contract.storage[BLOCK_N]
+		// Amount of blocks found for the block (used to determine the difficulty)
+		contract.storage[BLOCK_F + blockNo] = contract.storage[BLOCK_F + blockNo] + 1
+		// Change the seed
+		contract.storage[SEED] = contract.storage[SEED] + 1
 
-	// Reward 1000 JeffCoin to the miner
-	contract.storage[ADDR_START + tx.sender()] = contract.storage[ADDR_START + tx.sender()] + 100000
+		// Reward 1000 JeffCoin to the miner
+		contract.storage[ADDR_START + tx.sender()] = contract.storage[ADDR_START + tx.sender()] + 100000
 
-	// Check if we need to increase the difficulty
-	if contract.storage[ETH_START_B] < block.number() {
-		// TODO update difficulty
+		// Check if we need to increase the difficulty
+		if contract.storage[ETH_START_B] < block.number() {
+			// TODO update difficulty
+		}
+
+		stop()
 	}
 }
