@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"math/big"
 	"os"
 	"time"
 
@@ -11,7 +10,8 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
+	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -23,11 +23,14 @@ var (
 	coinlogger   = ethlog.NewLogger("JEFF")
 )
 
+func Val(v interface{}) *ethutil.Value {
+	return ethutil.NewValue(v)
+}
+
 type JeffCoin struct {
 	state *ethstate.State
 	eth   *eth.Ethereum
-	fake  *ethstate.StateObject
-	pub   *ethpub.PEthereum
+	pipe  *ethpipe.Pipe
 	key   *ethcrypto.KeyPair
 
 	mineStopChan chan bool
@@ -35,14 +38,16 @@ type JeffCoin struct {
 }
 
 func New(ethereum *eth.Ethereum, keyPair *ethcrypto.KeyPair) *JeffCoin {
-	state := ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, ethereum.StateManager().CurrentState().Root()))
-	fake := state.GetOrNewStateObject(keyPair.Address())
+	var (
+		state = ethstate.New(ethtrie.New(ethutil.Config.Db, ethereum.StateManager().CurrentState().Root()))
+		pipe  = ethpipe.New(ethereum)
+	)
+	pipe.Vm.State = state
 
 	return &JeffCoin{
 		eth:          ethereum,
 		state:        state,
-		fake:         fake,
-		pub:          ethpub.New(ethereum),
+		pipe:         pipe,
 		key:          keyPair,
 		mineStopChan: make(chan bool, 1),
 	}
@@ -77,25 +82,28 @@ func (self *JeffCoin) Start() {
 			exit("cannot read contract.mu %v\n", err)
 		}
 
-		receipt, err := self.pub.Create(ethutil.Bytes2Hex(self.key.PrivateKey), "0", "6000", "10000000000000", code)
+		JeffCoinAddr, err := self.pipe.Transact(self.key, nil, Val(0), Val(6000), Val(10000000000000), []byte(code))
 		if err != nil {
 			exit("initial %v\n", err)
 		}
 
-		JeffCoinAddr = ethutil.Hex2Bytes(receipt.Address)
 		coinlogger.Infof("init contract %x\n", JeffCoinAddr)
 		err = ethutil.WriteFile(addrPath, []byte(ethutil.Bytes2Hex(JeffCoinAddr)))
 		if err != nil {
 			exit("err write %v\n", err)
 		}
 	}
+
+	pipe := self.pipe
+	cfg := pipe.World().Config()
+	fmt.Printf("NameReg, JeffAddr = %x\n", cfg.Get("NameReg").StorageString("Jeff").Bytes())
 }
 
 func (self *JeffCoin) Balance() int32 {
-	stateObject := self.state.GetStateObject(JeffCoinAddr)
-	if stateObject != nil {
-		addr := ethutil.NewValue(1000).Add(self.fake.Address())
-		value := stateObject.GetStorage(addr.BigInt())
+	object := self.pipe.World().Get(JeffCoinAddr)
+	if object != nil {
+		addr := Val(1000).Add(self.key.Address())
+		value := object.StorageValue(addr)
 
 		return int32(value.Uint())
 	}
@@ -104,10 +112,9 @@ func (self *JeffCoin) Balance() int32 {
 }
 
 func (self *JeffCoin) getSeed() int {
-	stateObject := self.state.GetStateObject(JeffCoinAddr)
-
-	if stateObject != nil {
-		return int(stateObject.GetStorage(ethutil.Big("3")).Uint())
+	object := self.pipe.World().Get(JeffCoinAddr)
+	if object != nil {
+		return int(object.StorageValue(Val(3)).Uint())
 	}
 
 	exit("err not found")
@@ -116,9 +123,9 @@ func (self *JeffCoin) getSeed() int {
 }
 
 func (self *JeffCoin) getDiff() int {
-	stateObject := self.state.GetStateObject(JeffCoinAddr)
-	if stateObject != nil {
-		return int(stateObject.GetStorage(ethutil.Big("1")).Uint())
+	object := self.pipe.World().Get(JeffCoinAddr)
+	if object != nil {
+		return int(object.StorageValue(Val(1)).Uint())
 	}
 
 	exit("err not found")
@@ -128,7 +135,7 @@ func (self *JeffCoin) getDiff() int {
 
 func (self *JeffCoin) createTx(nonce []byte) (err error) {
 	data := ethutil.ParseData("mine", nonce)
-	_, err = self.pub.Transact(ethutil.Bytes2Hex(self.key.PrivateKey), ethutil.Bytes2Hex(JeffCoinAddr), "0", "6000", "10000000000000", "0x"+ethutil.Bytes2Hex(data))
+	_, err = self.pipe.Transact(self.key, JeffCoinAddr, Val(0), Val(6000), Val(10000000000000), data)
 
 	return
 }
@@ -146,8 +153,8 @@ func (self *JeffCoin) StopMiner() {
 func (self *JeffCoin) Mine() {
 	var (
 		quitChan  = make(chan bool, 1)
-		blockChan = make(chan ethutil.React, 1)
-		txChan    = make(chan ethutil.React, 1)
+		blockChan = make(chan ethreact.Event, 1)
+		txChan    = make(chan ethreact.Event, 1)
 		reactor   = self.eth.Reactor()
 		block     = self.eth.BlockChain().CurrentBlock
 
@@ -168,18 +175,16 @@ out:
 		case msg := <-blockChan:
 			quitChan <- true
 			// Get the new Ethereum state
-			self.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, self.eth.StateManager().CurrentState().Root()))
+			self.state = ethstate.New(ethtrie.New(ethutil.Config.Db, self.eth.StateManager().CurrentState().Root()))
 			block = msg.Resource.(*ethchain.Block)
 		case msg := <-txChan:
 			tx := msg.Resource.(*ethchain.Transaction)
 
 			if bytes.Compare(tx.Recipient, JeffCoinAddr) == 0 {
-				object := self.state.GetStateObject(JeffCoinAddr)
-				callerClosure := ethvm.NewClosure(self.fake, object, object.Code, big.NewInt(1000000), big.NewInt(0))
-
-				_, _, e := callerClosure.Call(vm, tx.Data)
-				if e != nil {
-					fmt.Println("error", e)
+				object := self.pipe.World().Get(JeffCoinAddr)
+				_, err := self.pipe.ExecuteObject(object, tx.Data, Val(0), Val(1000000), Val(0))
+				if err != nil {
+					coinlogger.Infoln(err)
 				}
 
 				// A block has been found and thus the seed has probably changed
